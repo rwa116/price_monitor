@@ -22,14 +22,12 @@ client.on('ready', () => {
     console.log('PriceMonitor is now online.');
     client.guilds.cache.forEach(guild => {
         connection.query(
-            `SELECT guildNotif FROM MonitorInfo WHERE guildId = '${guild.id}'`
+            `SELECT guildNotif, guildJob FROM MonitorInfo WHERE guildId = '${guild.id}'`
         ).then(result => {
+            console.log(result);
             toggleNotif.set(guild.id, result[0][0].guildNotif);
-        }).catch(err => console.log(err));
-        connection.query(
-            `SELECT guildJob FROM MonitorInfo WHERE guildId = '${guild.id}'`
-        ).then(result => {
             runningJob.set(guild.id, result[0][0].guildJob);
+            
         }).catch(err => console.log(err));
         jobName.set(guild.id, null);
         jobUrl.set(guild.id, null);
@@ -70,7 +68,8 @@ client.on("message", async (message) => {
         + "**!stock <interval(s)> <item url>**\n\n"
         + "To monitor an item for a price drop below a desired threshold price use: \n"
         + "**!price <interval(s)> <threshold price> <item url>**\n\n"
-        + "It is best to use an interval > 300 seconds for !stock and !price commands to reduce the chance of being softbanned from Amazon's website.\n\n"
+        + "It is best to use an interval > 300 seconds for !stock and !price commands to reduce the chance of being "
+        + "softbanned from Amazon's website.\n\n"
         + "To toggle between full notifications and only pricedrop/instock notifcations use: \n"
         + "**!notif** or **!toggle**\n\n"
         + "To list all current stock/price checking jobs being run use: \n"
@@ -173,7 +172,8 @@ client.on("message", async (message) => {
 
         //add all variables to database and respective maps
         await connection.query(
-            `UPDATE MonitorInfo SET guildJobName = '${currentName}', guildUrl = '${itemUrlString}', guildCaller = '${message.author}', guildInterval = '${cronDate}' WHERE guildId = '${message.guild.id}'`
+            `UPDATE MonitorInfo SET guildJobName = '${currentName}', guildUrl = '${itemUrlString}', guildCaller = ` 
+            + `'${message.author}', guildInterval = '${cronDate}' WHERE guildId = '${message.guild.id}'`
         );
         jobName.set(message.guild.id, currentName);
         jobUrl.set(message.guild.id, itemUrlString);
@@ -184,24 +184,38 @@ client.on("message", async (message) => {
         //create cronJob that monitors the specified item for stock
         let currentCronJob = cron.schedule(jobInterval.get(message.guild.id), async function() {
             let currentUrl = jobUrl.get(message.guild.id); 
-
-            var isInStock = await checkStock(currentUrl);
-
-                if(isInStock) {
-                    message.channel.send(`${jobName.get(message.guild.id)} is in stock! ${jobCaller.get(message.guild.id)}`);
-                    message.channel.send(currentUrl);
-                }
-                else { 
-                    if(toggleNotif) {
-                        message.channel.send(`${jobName.get(message.guild.id)} is NOT in stock!`);
+            try {
+                await checkStock(currentUrl).then((isInStock) => {
+                    if(isInStock) {
+                        message.channel.send(`${jobName.get(message.guild.id)} is in stock! `
+                        + `${jobCaller.get(message.guild.id)}`);
+                        message.channel.send(currentUrl);
                     }
-                }
+                    else { 
+                        if(toggleNotif) {
+                            message.channel.send(`${jobName.get(message.guild.id)} is NOT in stock!`);
+                        }
+                    }
+                }).catch((err) => {
+                    console.log(err);
+                    console.log("reach test 3");
+                });
+
+                
+            }
+            catch(err) {
+                console.log(err);
+                console.log("reach test 2");
+                //currentJob.get(message.guild.id).stop();
+            }
+            
         });
 
         //update runningJob and database with new job
         runningJob.set(message.guild.id, currentCronJob);
         await connection.query(
-            `UPDATE MonitorInfo SET guildJob = '${JSON.stringify(currentCronJob)}' WHERE guildId = '${message.guild.id}'`
+            `UPDATE MonitorInfo SET guildJob = '${JSON.stringify(currentCronJob)}' `
+            + `WHERE guildId = '${message.guild.id}'`
         );
     }
 
@@ -286,7 +300,8 @@ client.on("message", async (message) => {
 
         //add all variables to database and respective maps
         await connection.query(
-            `UPDATE MonitorInfo SET guildJobName = '${currentName}', guildUrl = '${itemUrlString}', guildCaller = '${message.author}', guildInterval = '${cronDate}' WHERE guildId = '${message.guild.id}'`
+            `UPDATE MonitorInfo SET guildJobName = '${currentName}', guildUrl = '${itemUrlString}', `
+            + `guildCaller = '${message.author}', guildInterval = '${cronDate}' WHERE guildId = '${message.guild.id}'`
         );
         jobName.set(message.guild.id, currentName);
         jobUrl.set(message.guild.id, itemUrlString);
@@ -301,7 +316,8 @@ client.on("message", async (message) => {
                 await getPrice(currentUrl).then((gotPrice) => {
                     let currentPrice = parseFloat(gotPrice);
                     if(currentPrice < currentThresh) {
-                        message.channel.send(`Price drop! Current price is $${currentPrice}, ${jobCaller.get(message.guild.id)}`);
+                        message.channel.send(`Price drop! Current price is $${currentPrice}, `
+                        + `${jobCaller.get(message.guild.id)}`);
                         message.channel.send(currentUrl);
                     }
                     else {
@@ -317,7 +333,7 @@ client.on("message", async (message) => {
             }
 
             catch(err) {
-                console.log(err);
+                console.log(err); 
             }
         });
 
@@ -358,7 +374,9 @@ client.on("message", async (message) => {
         currentJob = "CLEAR";
         //reset all MonitorInfo table fields corresponding to calling server
         await connection.query(
-            `UPDATE MonitorInfo SET guildJob = '${currentJob}', guildJobName = '${null}', guildUrl = '${null}', guildJobName = '${null}', guildCaller = '${null}', guildInterval = '${null}', guildThresh = '${null}' WHERE guildId = '${message.guild.id}'`
+            `UPDATE MonitorInfo SET guildJob = '${currentJob}', guildJobName = '${null}', guildUrl = '${null}', `
+            + `guildJobName = '${null}', guildCaller = '${null}', guildInterval = '${null}', guildThresh = '${null}' `
+            + `WHERE guildId = '${message.guild.id}'`
         );
     }
 

@@ -3,28 +3,35 @@ const axios = require('axios');
 
 
 //returns true if item in stock, false otherwise
-async function checkStock(itemUrl) {
-    try {
-        const { data } = await axios({
-            method: "GET",
-            url: itemUrl,
-        });
-
-
-        const $ = cheerio.load(data);
-        const elementSelector = '#qualifiedBuybox';
-        let isDefined = $(elementSelector).attr('id');
-        
-        if(isDefined) {
-            return true;
+function checkStock(itemUrl) {
+    return new Promise(async function(resolve, reject) {
+        try {
+            //probably need to make this a promise and reject?
+            const { data } = await axios({
+                method: "GET",
+                url: itemUrl,
+            });
+    
+    
+            const $ = cheerio.load(data);
+            const elementSelector = '#qualifiedBuybox';
+            let isDefined = $(elementSelector).attr('id');
+            
+            if(isDefined) {
+                isDefined =  true;
+            }
+            else {
+                isDefined = false;
+            }
+            resolve(isDefined);
         }
-        else {
-            return false;
+        catch(err) {
+            console.log(err);
+            reject(err);
+            console.log("reach test");
         }
-    }
-    catch(err) {
-        console.error(err);
-    }
+    })
+    
 }
 
 function getName(itemUrl) {
